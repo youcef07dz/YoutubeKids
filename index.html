@@ -173,6 +173,17 @@
   <script>
     const CHANNELS_KEY = 'yt_channel_list';
     const CACHE_KEY = 'yt_video_cache';
+    const DEFAULTS_KEY = 'yt_defaults_loaded';
+
+    const DEFAULT_CHANNELS = [
+      'UCS7H8U-n5mINVJjJsaRtGHg',
+      'UC9trsD1jCTXXtN3xIOIU8gg',
+      'UCDeu_yKuIVxQJX1OUWXMedA',
+      'UCEof7Z2iOP48t9a0HYoek7A',
+      'UCZTLU39XbfN04FBXVc0vD1g',
+      'UCuQKih3Ac3NABADQKQdeV6A',
+      'UC9T90Azy2A0q2HZJS20iR1w'
+    ];
 
     function getChannels() {
       try { return JSON.parse(localStorage.getItem(CHANNELS_KEY)) || []; } catch { return []; }
@@ -340,16 +351,28 @@
             const existingIds = new Set(existing.map(c => c.id));
             chSet.forEach(id => { if (!existingIds.has(id)) existing.push({ id, name: id.slice(0, 15) + '...' }); });
             saveChannels(existing);
-            render();
+    render();
           }
         } catch { alert('ملف JSON غير صالح'); }
       };
       reader.readAsText(file);
     }
 
+    function loadDefaults() {
+      if (!localStorage.getItem(DEFAULTS_KEY)) {
+        saveChannels(DEFAULT_CHANNELS.map(id => ({ id, name: id.slice(0, 15) + '...' })));
+        localStorage.setItem(DEFAULTS_KEY, '1');
+      }
+    }
+
     function render() {
       const videos = getCache();
-      const channels = getChannels();
+      let channels = getChannels();
+
+      if (channels.length === 0) {
+        loadDefaults();
+        channels = getChannels();
+      }
 
       if (channels.length === 0) {
         const app = document.getElementById('app');
