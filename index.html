@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>مشاهدة القنوات</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0f0f0f;
+      font-family: 'Segoe UI', 'Tahoma', 'Noto Sans Arabic', sans-serif;
+      color: #fff;
+    }
+    .header {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .header .logo { font-size: 20px; font-weight: 700; }
+    .header .logo span { color: #ff4444; }
+    .header .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .header .actions button {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      transition: background 0.2s;
+    }
+    .header .actions button:hover { background: rgba(255,255,255,0.2); }
+    .header .actions button.primary { background: #ff4444; }
+    .header .actions button.primary:hover { background: #cc0000; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+    .status {
+      text-align: center;
+      padding: 12px;
+      font-size: 14px;
+      color: #888;
+    }
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .video-card {
+      background: #1a1a1a;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .video-card:hover { transform: translateY(-4px); }
+    .thumb {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%;
+      background: #222;
+    }
+    .thumb img {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    .info { padding: 12px; }
+    .info .title {
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .info .meta {
+      font-size: 13px;
+      color: #aaa;
+      margin-top: 4px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+    .loading .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #333;
+      border-top-color: #ff4444;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .channels-bar {
+      display: flex;
+      gap: 8px;
+      padding: 12px 20px;
+      overflow-x: auto;
+      background: #151515;
+      border-bottom: 1px solid #222;
+      scrollbar-width: none;
+    }
+    .channels-bar::-webkit-scrollbar { display: none; }
+    .channels-bar .chip {
+      padding: 6px 16px;
+      border-radius: 16px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #aaa;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+    .channels-bar .chip.active { background: #ff4444; color: #fff; border-color: #ff4444; }
+    .channels-bar .chip:hover:not(.active) { background: #222; }
+
+    .landing { max-width: 600px; margin: 40px auto; text-align: center; padding: 0 20px; }
+    .landing h1 { font-size: 26px; margin-bottom: 8px; }
+    .landing p { color: #888; margin-bottom: 20px; }
+    .landing textarea {
+      width: 100%;
+      height: 200px;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #fff;
+      font-size: 13px;
+      font-family: monospace;
+      outline: none;
+      resize: vertical;
+      direction: ltr;
+      text-align: left;
+    }
+    .landing textarea:focus { border-color: #ff4444; }
+    .landing .btn-row { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+    .landing .btn-row button {
+      padding: 12px 32px;
+      border: none;
+      border-radius: 24px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .landing .btn-row .primary { background: #ff4444; color: #fff; }
+    .landing .btn-row .primary:hover { background: #cc0000; }
+    .landing .btn-row .secondary { background: #222; color: #ccc; }
+    .landing .btn-row .secondary:hover { background: #333; }
+
+    @media (max-width: 600px) {
+      .header { padding: 12px 16px; }
+      .container { padding: 12px; }
+      .video-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+      .info .title { font-size: 13px; }
+      .info .meta { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const CHANNELS_KEY = 'yt_channel_list';
+    const CACHE_KEY = 'yt_video_cache';
+
+    function getChannels() {
+      try { return JSON.parse(localStorage.getItem(CHANNELS_KEY)) || []; } catch { return []; }
+    }
+
+    function saveChannels(list) {
+      localStorage.setItem(CHANNELS_KEY, JSON.stringify(list));
+    }
+
+    function getCache() {
+      try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || []; } catch { return []; }
+    }
+
+    function setCache(videos) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(videos));
+    }
+
+    function downloadJSON(data, filename) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    const PROXIES = [
+      url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      url => `https://corsproxy.io/?${encodeURIComponent(url)}`
+    ];
+
+    async function fetchFeed(url) {
+      for (const proxy of PROXIES) {
+        try {
+          const res = await fetch(proxy(url));
+          if (res.ok) return await res.text();
+        } catch {}
+      }
+      return null;
+    }
+
+    function parseFeedXML(xml) {
+      const doc = new DOMParser().parseFromString(xml, 'text/xml');
+      const entries = doc.querySelectorAll('entry');
+      return Array.from(entries).map(entry => {
+        const id = entry.querySelector('yt\\:videoId')?.textContent || entry.querySelector('videoId')?.textContent || entry.querySelector('id')?.textContent?.replace('yt:video:', '') || '';
+        const title = entry.querySelector('title')?.textContent || '';
+        const published = entry.querySelector('published')?.textContent || '';
+        return { id, title, time: published ? new Date(published).toLocaleDateString('ar') : '', thumbnail: `https://img.youtube.com/vi/${id}/hqdefault.jpg`, channel: '', duration: '', views: '' };
+      }).filter(v => v.id);
+    }
+
+    async function syncAllChannels(onProgress) {
+      const channels = getChannels();
+      if (channels.length === 0) return [];
+
+      let allVideos = getCache();
+      const seen = new Set(allVideos.map(v => v.id));
+
+      for (let i = 0; i < channels.length; i++) {
+        const ch = channels[i];
+        if (onProgress) onProgress(`جلب ${ch.name || ch.id}...`, (i / channels.length) * 100);
+
+        const xml = await fetchFeed(`https://www.youtube.com/feeds/videos.xml?channel_id=${ch.id}`);
+        if (!xml) continue;
+
+        const newVids = parseFeedXML(xml);
+        let added = 0;
+        for (const v of newVids) {
+          if (!seen.has(v.id)) {
+            seen.add(v.id);
+            allVideos.push(v);
+            added++;
+          }
+        }
+        if (added > 0) console.log(`${ch.id}: +${added} جديد`);
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      allVideos.sort((a, b) => new Date(b.time) - new Date(a.time));
+      setCache(allVideos);
+      if (onProgress) onProgress(`تم! المجموع: ${allVideos.length} فيديو`, 100);
+      return allVideos;
+    }
+
+    function renderGrid(videos, filterId) {
+      const app = document.getElementById('app');
+      const filtered = filterId ? videos.filter(v => v.channelId === filterId) : videos;
+      const channels = getChannels();
+
+      app.innerHTML = `
+        <div class="header">
+          <div class="logo">&#9654; <span>تيوب</span>كوليكت</div>
+          <div class="actions">
+            <button onclick="syncAndRender()">&#8635; مزامنة الكل</button>
+            <button onclick="downloadJSON(getCache(), 'video.json')">&#8595; تحميل video.json</button>
+            <button onclick="showChannels()">القنوات</button>
+          </div>
+        </div>
+        <div class="channels-bar">
+          <div class="chip ${!filterId ? 'active' : ''}" onclick="render()">الكل (${videos.length})</div>
+          ${channels.map(c => `<div class="chip ${filterId === c.id ? 'active' : ''}" onclick="renderGrid(getCache(),'${c.id}')">${c.name || c.id}</div>`).join('')}
+        </div>
+        <div id="status" class="status">${videos.length} فيديو</div>
+        <div class="container">
+          <div class="video-grid">${filtered.map(v => `
+            <div class="video-card" onclick="window.location.href='embed.html#${v.id}'">
+              <div class="thumb"><img src="${v.thumbnail}" alt="" loading="lazy" onerror="this.src='https://img.youtube.com/vi/${v.id}/mqdefault.jpg'"></div>
+              <div class="info"><div class="title">${v.title}</div><div class="meta">${v.time || ''}</div></div>
+            </div>`).join('')}</div>
+        </div>`;
+    }
+
+    async function syncAndRender() {
+      const app = document.getElementById('app');
+      app.innerHTML = `<div class="loading"><div class="spinner"></div><div id="syncStatus">جارٍ مزامنة القنوات...</div></div>`;
+      const videos = await syncAllChannels((msg, pct) => {
+        document.getElementById('syncStatus').textContent = msg;
+      });
+      renderGrid(videos);
+    }
+
+    function showChannels() {
+      const channels = getChannels();
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <div class="header">
+          <div class="logo">&#9654; <span>تيوب</span>كوليكت</div>
+          <div class="actions">
+            <button onclick="render()">&#8594; رجوع</button>
+            <button class="primary" onclick="document.getElementById('fileInput').click()">تحميل video.json</button>
+            <input type="file" id="fileInput" accept=".json" style="display:none" onchange="loadJSONFile(event)">
+          </div>
+        </div>
+        <div class="landing">
+          <h1>إدارة القنوات</h1>
+          <p>ألصق معرفات القنوات (UC_...) كل معرف في سطر</p>
+          <textarea id="chArea" placeholder="UCUCS7H8U-n5mINVJjJsaRtGHg&#10;UC9trsD1jCTXXtN3xIOIU8gg">${channels.map(c => c.id).join('\n')}</textarea>
+          <div class="btn-row">
+            <button class="primary" onclick="saveChannelList()">حفظ ومزامنة</button>
+            <button class="secondary" onclick="render()">إلغاء</button>
+          </div>
+        </div>`;
+    }
+
+    function saveChannelList() {
+      const raw = document.getElementById('chArea').value.trim();
+      const ids = [...new Set(raw.split('\n').map(l => l.trim()).filter(l => /^UC/.test(l)))];
+      saveChannels(ids.map(id => ({ id, name: id.slice(0, 15) + '...' })));
+      syncAndRender();
+    }
+
+    function loadJSONFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (Array.isArray(data)) {
+            setCache(data);
+            const chSet = new Set();
+            data.forEach(v => { if (v.channelId) chSet.add(v.channelId); });
+            const existing = getChannels();
+            const existingIds = new Set(existing.map(c => c.id));
+            chSet.forEach(id => { if (!existingIds.has(id)) existing.push({ id, name: id.slice(0, 15) + '...' }); });
+            saveChannels(existing);
+            render();
+          }
+        } catch { alert('ملف JSON غير صالح'); }
+      };
+      reader.readAsText(file);
+    }
+
+    function render() {
+      const videos = getCache();
+      const channels = getChannels();
+
+      if (channels.length === 0) {
+        const app = document.getElementById('app');
+        app.innerHTML = `
+          <div class="header">
+            <div class="logo">&#9654; <span>تيوب</span>كوليكت</div>
+            <div class="actions">
+              <button class="primary" onclick="document.getElementById('fileInput').click()">تحميل video.json</button>
+              <input type="file" id="fileInput" accept=".json" style="display:none" onchange="loadJSONFile(event)">
+            </div>
+          </div>
+          <div class="landing">
+            <h1>مشاهدة قنوات يوتيوب متعددة</h1>
+            <p>ألصق معرفات القنوات (UC_...) للبدء</p>
+            <textarea id="chArea" placeholder="UCUCS7H8U-n5mINVJjJsaRtGHg&#10;UC9trsD1jCTXXtN3xIOIU8gg&#10;UCDeu_yKuIVxQJX1OUWXMedA"></textarea>
+            <div class="btn-row">
+              <button class="primary" onclick="saveChannelList()">حفظ ومزامنة</button>
+            </div>
+          </div>`;
+        return;
+      }
+
+      if (videos.length === 0) {
+        syncAndRender();
+        return;
+      }
+
+      renderGrid(videos);
+    }
+
+    render();
+  </script>
+</body>
+</html>
